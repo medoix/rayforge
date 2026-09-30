@@ -1,0 +1,12 @@
+name: command_essentials
+display_name: "Command Essentials"
+description: "Inject custom machine code into the workflow"
+api_version: 19
+author:
+  name: "Rayforge Team"
+  email: "noreply@rayforge.org"
+provides:
+  worker: "command_essentials.worker"
+  frontend: "command_essentials.frontend"
+license:
+  name: "MIT"

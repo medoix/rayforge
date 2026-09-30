@@ -1,0 +1,63 @@
+# French translations for Rayforge.
+# Copyright (C) 2026 The Rayforge Project
+# This file is distributed under the same license as the Rayforge package.
+# Samuel Abels <knipknap@gmail.com>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Rayforge\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-01 00:50+0200\n"
+"PO-Revision-Date: 2026-10-01 00:50+0200\n"
+"Last-Translator: Samuel Abels <knipknap@gmail.com>\n"
+"Language-Team: none\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: command_essentials/widgets/command_page.py
+msgid "Machine Code"
+msgstr "Code machine"
+
+#: command_essentials/widgets/command_page.py
+#, python-brace-format
+msgid ""
+"One line per command, emitted at this step's position in the workflow. Path "
+"variables like {machine.name} and {layer.name} are expanded when the job is "
+"encoded."
+msgstr ""
+"Une ligne par commande, émise à la position de cette étape dans le "
+"flux de travail. Les variables de chemin comme {machine.name} et "
+"{layer.name} sont développées lors de l'encodage du travail."
+
+#: command_essentials/steps/command_step.py
+msgid "Command"
+msgstr "Commande"
+
+#: command_essentials/steps/command_step.py
+msgid "No machine code"
+msgstr "Aucun code machine"
+
+#: command_essentials/steps/command_step.py
+#, python-brace-format
+msgid "{count} lines"
+msgstr "{count} lignes"
+
+#: command_essentials/steps/command_step.py
+msgid "The command step has no machine code."
+msgstr "L'étape de commande ne contient aucun code machine."
+
+#: command_essentials/steps/command_step.py
+#, python-brace-format
+msgid ""
+"The '{name}' driver does not support custom machine code; the lines are not "
+"emitted for this machine."
+msgstr ""
+"Le pilote « {name} » ne prend pas en charge le code machine "
+"personnalisé ; les lignes ne sont pas émises pour cette machine."
+
+#: command_essentials/steps/command_step.py
+msgid "None"
+msgstr "Aucun"
