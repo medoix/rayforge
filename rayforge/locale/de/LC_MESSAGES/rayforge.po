@@ -10381,3 +10381,53 @@ msgstr "Bayer 4"
 #: rayforge/image/dither.py
 msgid "Bayer 8"
 msgstr "Bayer 8"
+
+#: rayforge/machine/driver/ruidarpa/rpa_adapter.py
+msgid "Protocol"
+msgstr "Protokoll"
+
+#: rayforge/machine/driver/ruidarpa/rpa_adapter.py
+msgid ""
+"Network protocol used to reach the hostname. Most controllers use UDP; newer "
+"ones such as the RDC8445S use TCP."
+msgstr ""
+"Netzwerkprotokoll für die Verbindung zum Hostnamen. Die meisten Controller "
+"verwenden UDP, neuere wie der RDC8445S verwenden TCP."
+
+#: rayforge/machine/driver/ruidarpa/rpa_adapter.py
+msgid "Z homing"
+msgstr "Z-Referenzfahrt"
+
+#: rayforge/machine/driver/ruidarpa/rpa_adapter.py
+msgid ""
+"How Home Z finds the Z reference. Machines with an auto-focus probe instead "
+"of a Z home switch must use the focus probe; it needs material under the "
+"probe."
+msgstr ""
+"Legt fest, wie die Referenzfahrt Z den Z-Bezugspunkt findet. Maschinen mit "
+"Autofokus-Sensor statt Z-Referenzschalter müssen den Fokussensor verwenden; "
+"dafür muss Material unter dem Sensor liegen."
+
+#: rayforge/machine/driver/ruidarpa/rpa_adapter.py
+msgid "Home switch"
+msgstr "Referenzschalter"
+
+#: rayforge/machine/driver/ruidarpa/rpa_adapter.py
+msgid "Focus probe"
+msgstr "Fokussensor"
+
+#: rayforge/machine/driver/ruidarpa/rpa_probe.py
+msgid "Unrecognised Ruida controller model; settings may differ."
+msgstr "Unbekanntes Ruida-Controllermodell; Einstellungen können abweichen."
+
+#: rayforge/machine/driver/ruidarpa/rpa_probe.py
+msgid "Could not read the Ruida bed size."
+msgstr "Die Arbeitsfläche des Ruida konnte nicht gelesen werden."
+
+#: rayforge/machine/driver/ruidarpa/rpa_probe.py
+msgid "Could not read the Ruida maximum speeds."
+msgstr "Die Höchstgeschwindigkeiten des Ruida konnten nicht gelesen werden."
+
+#: rayforge/machine/driver/ruidarpa/rpa_probe.py
+msgid "Could not read the Ruida acceleration."
+msgstr "Die Beschleunigung des Ruida konnte nicht gelesen werden."
