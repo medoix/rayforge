@@ -150,3 +150,32 @@ class TestRunJobDelegation:
         driver, _mock_driver = _direct_driver(connected=False)
         with pytest.raises(RuntimeError, match="not connected"):
             driver.run_job()
+
+
+class TestStartDelegation:
+    """start() forwards connection parameters to RdDriver.start()."""
+
+    def test_forwards_protocol(self):
+        """A TCP protocol reaches the wrapped driver."""
+        driver, mock_driver = _direct_driver(connected=False)
+        mock_driver.start.return_value = True
+
+        assert driver.start("192.168.1.208", None, 0x88, protocol="tcp")
+
+        mock_driver.start.assert_called_once_with(
+            udp_host="192.168.1.208",
+            usb_device=None,
+            magic=0x88,
+            protocol="tcp",
+        )
+
+    def test_omits_unset_protocol(self):
+        """No protocol keeps the wrapped driver's previous choice."""
+        driver, mock_driver = _direct_driver(connected=False)
+        mock_driver.start.return_value = False
+
+        assert not driver.start("192.168.1.10")
+
+        mock_driver.start.assert_called_once_with(
+            udp_host="192.168.1.10", usb_device=None
+        )

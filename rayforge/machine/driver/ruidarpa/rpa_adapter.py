@@ -32,6 +32,7 @@ from ruidadriver.rd_status import RdStatusEvent
 from rayforge.context import RayforgeContext
 from rayforge.core.varset import (
     BoolVar,
+    ChoiceVar,
     FloatVar,
     HostnameVar,
     SerialPortVar,
@@ -81,6 +82,11 @@ DEFAULT_MOVE_TO_JOG_SPEED_MM_S = 600.0
 # Driver-level default for the RPC sync request timeout (seconds); the
 # RpcRdDriver class default is 5.0 for direct constructions.
 DEFAULT_RPC_TIMEOUT_S = 30.0
+
+# Network protocol choices for the controller host. Older controllers
+# (e.g. RDC6442S) use UDP; newer ones (e.g. RDC8445S) use TCP.
+NETWORK_PROTOCOLS = ("UDP", "TCP")
+DEFAULT_NETWORK_PROTOCOL = "UDP"
 
 # Ruida test-hardware speed limits (mm/min base units): 400 mm/s cut,
 # 600 mm/s travel. Seeded into the machine only while it still holds the
@@ -183,6 +189,7 @@ class RuidaRPAAdapter(Driver):
         self._tui_mode: bool = False
         self._rpc_timeout: float = DEFAULT_RPC_TIMEOUT_S
         self._magic: int | None = None
+        self._network_protocol: str = DEFAULT_NETWORK_PROTOCOL.lower()
         self._backend: _RpaBackend | None = None
         self._listeners_registered: bool = False
         self._unreachable_warned: bool = False
@@ -262,6 +269,18 @@ class RuidaRPAAdapter(Driver):
                     description=_(
                         "The IP address or hostname of the Ruida controller"
                     ),
+                ),
+                ChoiceVar(
+                    key="network_protocol",
+                    label=_("Protocol"),
+                    description=_(
+                        "Network protocol used to reach the hostname. Most "
+                        "controllers use UDP; newer ones such as the "
+                        "RDC8445S use TCP."
+                    ),
+                    choices=list(NETWORK_PROTOCOLS),
+                    default=DEFAULT_NETWORK_PROTOCOL,
+                    allow_none=False,
                 ),
                 RuidaUsbDeviceVar(
                     key="usb_device",
@@ -419,6 +438,18 @@ class RuidaRPAAdapter(Driver):
             )
         return magic
 
+    @staticmethod
+    def _parse_network_protocol(raw_protocol: Any) -> str:
+        if raw_protocol is None or not str(raw_protocol).strip():
+            return DEFAULT_NETWORK_PROTOCOL.lower()
+        protocol = str(raw_protocol).strip().upper()
+        if protocol not in NETWORK_PROTOCOLS:
+            raise DriverSetupError(
+                "Network protocol must be one of: "
+                + ", ".join(NETWORK_PROTOCOLS)
+            )
+        return protocol.lower()
+
     def _setup_implementation(self, **kwargs: Any) -> None:
         self._config = dict(kwargs)
         self._tui_mode = bool(kwargs.get("tui", False))
@@ -427,6 +458,9 @@ class RuidaRPAAdapter(Driver):
             kwargs.get("timeout", DEFAULT_RPC_TIMEOUT_S)
         )
         self._magic = self._parse_magic_number(kwargs.get("magic_number"))
+        self._network_protocol = self._parse_network_protocol(
+            kwargs.get("network_protocol")
+        )
 
         self._listeners_registered = False
         self._unreachable_warned = False
@@ -463,21 +497,30 @@ class RuidaRPAAdapter(Driver):
         """
         old_uri = self.resource_uri
         old_tui_mode = self._tui_mode
+        old_protocol = self._network_protocol
 
         try:
             timeout = self._parse_rpc_timeout(
                 kwargs.get("timeout", DEFAULT_RPC_TIMEOUT_S)
             )
             magic = self._parse_magic_number(kwargs.get("magic_number"))
+            protocol = self._parse_network_protocol(
+                kwargs.get("network_protocol")
+            )
         except DriverSetupError:
             return False
 
         self._config = dict(kwargs)
         self._rpc_timeout = timeout
         self._magic = magic
+        self._network_protocol = protocol
 
         tui_mode = bool(kwargs.get("tui", False))
-        return tui_mode == old_tui_mode and self.resource_uri == old_uri
+        return (
+            tui_mode == old_tui_mode
+            and protocol == old_protocol
+            and self.resource_uri == old_uri
+        )
 
     async def _connect_implementation(self) -> None:
         if self._connection_task and not self._connection_task.done():
@@ -550,7 +593,11 @@ class RuidaRPAAdapter(Driver):
                     started = await loop.run_in_executor(
                         None,
                         partial(
-                            backend.start, udp_host, usb_device, self._magic
+                            backend.start,
+                            udp_host,
+                            usb_device,
+                            self._magic,
+                            protocol=self._network_protocol,
                         ),
                     )
                     connected = started
@@ -594,7 +641,11 @@ class RuidaRPAAdapter(Driver):
                     connected = await loop.run_in_executor(
                         None,
                         partial(
-                            driver.start, udp_host, usb_device, self._magic
+                            driver.start,
+                            udp_host,
+                            usb_device,
+                            self._magic,
+                            protocol=self._network_protocol,
                         ),
                     )
                     if connected:

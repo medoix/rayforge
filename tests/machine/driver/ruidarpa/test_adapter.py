@@ -38,7 +38,12 @@ from rpalib.rpyc_client import RpcRdDriver
 from ruidadriver.rd_gluescript import GlueScript
 
 from rayforge.core.doc import Doc
-from rayforge.core.varset import BoolVar, FloatVar, SerialPortVar
+from rayforge.core.varset import (
+    BoolVar,
+    ChoiceVar,
+    FloatVar,
+    SerialPortVar,
+)
 from rayforge.machine.driver.driver import (
     Axis,
     DeviceStatus,
@@ -2874,6 +2879,113 @@ class TestUpdateSettings:
         assert accepted is False
         assert adapter._magic is None
         assert adapter._config == config_before
+
+
+class TestNetworkProtocol:
+    """The network protocol setting selects UDP or TCP for the host."""
+
+    def test_setup_var_is_choice_defaulting_to_udp(
+        self, isolated_context, isolated_machine
+    ):
+        """The protocol var offers UDP/TCP and defaults to UDP."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        var = adapter.get_setup_vars().get("network_protocol")
+        assert isinstance(var, ChoiceVar)
+        assert var.choices == ["UDP", "TCP"]
+        assert var.default == "UDP"
+
+    def test_setup_defaults_to_udp(self, isolated_context, isolated_machine):
+        """A missing protocol keeps the UDP behaviour."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10")
+        assert adapter._network_protocol == "udp"
+
+    def test_setup_accepts_tcp(self, isolated_context, isolated_machine):
+        """TCP is normalised to the ruida-pa protocol name."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10", network_protocol="TCP")
+        assert adapter._network_protocol == "tcp"
+
+    def test_setup_rejects_unknown_protocol(
+        self, isolated_context, isolated_machine
+    ):
+        """An unknown protocol is a setup error."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        with pytest.raises(DriverSetupError):
+            adapter._setup_implementation(
+                udp_host="192.168.1.10", network_protocol="SCTP"
+            )
+
+    def test_protocol_change_requests_rebuild(
+        self, isolated_context, isolated_machine
+    ):
+        """Switching UDP to TCP must reconnect to the controller."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10")
+
+        accepted = adapter.update_settings(
+            udp_host="192.168.1.10", network_protocol="TCP"
+        )
+
+        assert accepted is False
+        assert adapter._network_protocol == "tcp"
+
+    def test_unchanged_protocol_keeps_connection(
+        self, isolated_context, isolated_machine
+    ):
+        """Re-applying the same protocol is not an endpoint change."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10", network_protocol="TCP")
+
+        accepted = adapter.update_settings(
+            udp_host="192.168.1.10", network_protocol="TCP", timeout=9.5
+        )
+
+        assert accepted is True
+
+    def test_invalid_protocol_returns_false_and_keeps_state(
+        self, isolated_context, isolated_machine
+    ):
+        """A rejected protocol must not mutate the live adapter."""
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10")
+        config_before = dict(adapter._config)
+
+        accepted = adapter.update_settings(
+            udp_host="192.168.1.10", network_protocol="SCTP"
+        )
+
+        assert accepted is False
+        assert adapter._network_protocol == "udp"
+        assert adapter._config == config_before
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "adapter_pair",
+        [DIRECT_MODE, RPC_MODE],
+        ids=["direct", "rpc"],
+        indirect=True,
+    )
+    async def test_connection_loop_passes_protocol(
+        self, adapter_pair, monkeypatch
+    ):
+        """Both modes forward the protocol to backend.start()."""
+        adapter, backend = adapter_pair
+        adapter._network_protocol = "tcp"
+        monkeypatch.setattr(RuidaRPAAdapter, "CONNECTION_POLL_INTERVAL", 0.01)
+
+        adapter._keep_running = True
+        await adapter._connect_implementation()
+        try:
+            await _wait_until(lambda: backend.start.call_count >= 1)
+            assert backend.start.call_args.kwargs["protocol"] == "tcp"
+        finally:
+            adapter._keep_running = False
+            task = adapter._connection_task
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
 
 class TestSeedMachineSpeedDefaults:
