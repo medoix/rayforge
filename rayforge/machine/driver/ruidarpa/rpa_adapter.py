@@ -55,6 +55,10 @@ from rayforge.machine.driver.ruidarpa.rpa_encoder import (
     DEFAULT_IMAGE_POWER_BIAS,
     DEFAULT_POWER_FLOOR,
 )
+from rayforge.machine.driver.ruidarpa.rpa_probe import (
+    PROBE_SETTINGS,
+    build_ruida_profile,
+)
 from rayforge.machine.models.laser import LaserHead
 from rayforge.machine.transport import TransportStatus
 
@@ -62,6 +66,7 @@ if TYPE_CHECKING:
     from raygeo.ops import Ops
 
     from rayforge.core.doc import Doc
+    from rayforge.machine.device.profile import DeviceProfile
     from rayforge.machine.models.head import Head
     from rayforge.machine.models.laser import Laser
     from rayforge.machine.models.machine import Machine
@@ -173,7 +178,7 @@ class RuidaRPAAdapter(Driver):
     reports_granular_progress = False
     uses_gcode = False
     maturity = DriverMaturity.KNOWN_BUGGY
-    supports_probing = False
+    supports_probing = True
     native_overscan = True
     supports_multi_depth_raster = False
 
@@ -182,6 +187,10 @@ class RuidaRPAAdapter(Driver):
     RECONNECT_BASE_DELAY = 1.0
     RECONNECT_MAX_DELAY = 5.0
     RECONNECT_JITTER = 0.2  # ±20%
+
+    # --- Probe constants ---
+    PROBE_CONNECT_TIMEOUT = 10.0
+    PROBE_READ_TIMEOUT = 3.0
 
     def __init__(self, context: RayforgeContext, machine: Machine) -> None:
         super().__init__(context, machine)
@@ -258,6 +267,62 @@ class RuidaRPAAdapter(Driver):
                     "must be configured."
                 )
             )
+
+    @classmethod
+    async def probe(
+        cls, context: RayforgeContext, **kwargs: Any
+    ) -> tuple[DeviceProfile, list[str]]:
+        """Connect directly to a Ruida controller, read its machine
+        settings, and return an auto-populated ``(DeviceProfile,
+        warnings)`` tuple.
+
+        Always uses a direct connection; the TUI RPC option does not
+        apply to probing.
+        """
+        cls.precheck(**kwargs)
+        magic = cls._parse_magic_number(kwargs.get("magic_number"))
+        protocol = cls._parse_network_protocol(kwargs.get("network_protocol"))
+        loop = asyncio.get_running_loop()
+        backend = RpaDirectDriver()
+        try:
+            started = await loop.run_in_executor(
+                None,
+                partial(
+                    backend.start,
+                    kwargs.get("udp_host") or None,
+                    kwargs.get("usb_device") or None,
+                    magic,
+                    protocol=protocol,
+                ),
+            )
+            if not started:
+                raise ConnectionError("Failed to connect to Ruida controller")
+            await cls._wait_for_probe_connection(backend)
+            values = await loop.run_in_executor(
+                None,
+                backend.read_settings,
+                PROBE_SETTINGS,
+                cls.PROBE_READ_TIMEOUT,
+            )
+        finally:
+            await loop.run_in_executor(None, backend.stop)
+
+        profile, warnings = build_ruida_profile(values)
+        profile.machine_config.driver = cls.__name__
+        profile.machine_config.driver_args = kwargs
+        return profile, warnings
+
+    @classmethod
+    async def _wait_for_probe_connection(
+        cls, backend: RpaDirectDriver
+    ) -> None:
+        """Wait until the controller answers, or raise TimeoutError."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + cls.PROBE_CONNECT_TIMEOUT
+        while not backend.is_connected:
+            if loop.time() >= deadline:
+                raise TimeoutError("Ruida controller did not respond")
+            await asyncio.sleep(cls.CONNECTION_POLL_INTERVAL)
 
     @classmethod
     def get_setup_vars(cls) -> VarSet:
