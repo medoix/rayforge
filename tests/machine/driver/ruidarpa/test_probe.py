@@ -19,6 +19,7 @@ from rayforge.machine.driver.ruidarpa.rpa_probe import (
     PROBE_SETTINGS,
     build_ruida_profile,
     controller_name,
+    z_homing_from_settings,
 )
 
 RDC8445S_VALUES = {
@@ -85,6 +86,24 @@ class TestBuildRuidaProfile:
         assert controller_name({}) == "Ruida"
 
 
+class TestZHomingFromSettings:
+    """The focus-enabled flag selects the Z homing mode."""
+
+    def test_focus_enabled_selects_focus_probe(self):
+        # RDC8445S reads 0x8201: focus enabled, air assist by layer.
+        assert z_homing_from_settings({"MEM_FOCUS_CONFIG": 0x8201}) == (
+            "focus"
+        )
+
+    def test_focus_disabled_selects_home_switch(self):
+        assert z_homing_from_settings({"MEM_FOCUS_CONFIG": 0x8200}) == (
+            "switch"
+        )
+
+    def test_unread_setting_leaves_mode_unset(self):
+        assert z_homing_from_settings({}) is None
+
+
 def _probe_backend(monkeypatch, *, started=True, values=None) -> Mock:
     """Patch the adapter to build a mock direct driver for probing."""
     backend = Mock(spec=RpaDirectDriver)
@@ -118,6 +137,20 @@ class TestProbe:
         assert profile.machine_config.driver_args == args
         assert profile.machine_config.axis_extents == (1300.0, 900.0)
         assert warnings == []
+
+    @pytest.mark.asyncio
+    async def test_probe_sets_focus_z_homing(self, monkeypatch):
+        values = dict(RDC8445S_VALUES, MEM_FOCUS_CONFIG=0x8201)
+        _probe_backend(monkeypatch, values=values)
+
+        profile, _warnings = await RuidaRPAAdapter.probe(
+            Mock(), udp_host="192.168.1.208"
+        )
+
+        assert profile.machine_config.driver_args == {
+            "udp_host": "192.168.1.208",
+            "z_homing": "focus",
+        }
 
     @pytest.mark.asyncio
     async def test_probe_failed_start_raises_and_stops(self, monkeypatch):
