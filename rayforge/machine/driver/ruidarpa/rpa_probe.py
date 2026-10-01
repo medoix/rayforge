@@ -23,7 +23,17 @@ PROBE_SETTINGS = [
     "MEM_AXIS_MAX_VELOCITY_2",
     "MEM_AXIS_MAX_ACC_1",
     "MEM_AXIS_MAX_ACC_2",
+    "MEM_FOCUS_CONFIG",
 ]
+
+# How Home Z references the Z axis: a Z home switch (HOME_Z) or the
+# controller's auto-focus probe (FOCUS_Z). On an RDC8445S, HOME_Z stops
+# with the work against the probe, while FOCUS_Z leaves it at focus height.
+Z_HOMING_SWITCH = "switch"
+Z_HOMING_FOCUS = "focus"
+
+# MEM_FOCUS_CONFIG bit set when the controller has auto-focus enabled.
+_FOCUS_ENABLED_BIT = 0x0001
 
 _UM_PER_MM = 1000.0
 
@@ -48,6 +58,20 @@ def controller_name(values: dict[str, int]) -> str:
     if model is None:
         return f"Ruida (card ID 0x{card_id:08X})"
     return f"Ruida {model}"
+
+
+def z_homing_from_settings(values: dict[str, int]) -> str | None:
+    """Pick the Z homing mode from the controller's focus setting.
+
+    Returns "focus" when auto-focus is enabled, "switch" when it is
+    disabled, or None if the setting could not be read.
+    """
+    focus_config = values.get("MEM_FOCUS_CONFIG")
+    if focus_config is None:
+        return None
+    if focus_config & _FOCUS_ENABLED_BIT:
+        return Z_HOMING_FOCUS
+    return Z_HOMING_SWITCH
 
 
 def build_ruida_profile(

@@ -35,6 +35,7 @@ from rayforge.core.varset import (
     ChoiceVar,
     FloatVar,
     HostnameVar,
+    LabeledChoiceVar,
     SerialPortVar,
     Var,
     VarSet,
@@ -57,7 +58,10 @@ from rayforge.machine.driver.ruidarpa.rpa_encoder import (
 )
 from rayforge.machine.driver.ruidarpa.rpa_probe import (
     PROBE_SETTINGS,
+    Z_HOMING_FOCUS,
+    Z_HOMING_SWITCH,
     build_ruida_profile,
+    z_homing_from_settings,
 )
 from rayforge.machine.models.laser import LaserHead
 from rayforge.machine.transport import TransportStatus
@@ -199,6 +203,7 @@ class RuidaRPAAdapter(Driver):
         self._rpc_timeout: float = DEFAULT_RPC_TIMEOUT_S
         self._magic: int | None = None
         self._network_protocol: str = DEFAULT_NETWORK_PROTOCOL.lower()
+        self._z_homing: str = Z_HOMING_SWITCH
         self._backend: _RpaBackend | None = None
         self._listeners_registered: bool = False
         self._unreachable_warned: bool = False
@@ -309,7 +314,11 @@ class RuidaRPAAdapter(Driver):
 
         profile, warnings = build_ruida_profile(values)
         profile.machine_config.driver = cls.__name__
-        profile.machine_config.driver_args = kwargs
+        driver_args = dict(kwargs)
+        z_homing = z_homing_from_settings(values)
+        if z_homing is not None:
+            driver_args["z_homing"] = z_homing
+        profile.machine_config.driver_args = driver_args
         return profile, warnings
 
     @classmethod
@@ -345,6 +354,22 @@ class RuidaRPAAdapter(Driver):
                     ),
                     choices=list(NETWORK_PROTOCOLS),
                     default=DEFAULT_NETWORK_PROTOCOL,
+                    allow_none=False,
+                ),
+                LabeledChoiceVar(
+                    key="z_homing",
+                    label=_("Z homing"),
+                    description=_(
+                        "How Home Z finds the Z reference. Machines with "
+                        "an auto-focus probe instead of a Z home switch "
+                        "must use the focus probe; it needs material "
+                        "under the probe."
+                    ),
+                    choices=[
+                        (_("Home switch"), Z_HOMING_SWITCH),
+                        (_("Focus probe"), Z_HOMING_FOCUS),
+                    ],
+                    default=Z_HOMING_SWITCH,
                     allow_none=False,
                 ),
                 RuidaUsbDeviceVar(
@@ -515,6 +540,15 @@ class RuidaRPAAdapter(Driver):
             )
         return protocol.lower()
 
+    @staticmethod
+    def _parse_z_homing(raw_mode: Any) -> str:
+        if raw_mode is None or not str(raw_mode).strip():
+            return Z_HOMING_SWITCH
+        mode = str(raw_mode).strip().lower()
+        if mode not in (Z_HOMING_SWITCH, Z_HOMING_FOCUS):
+            raise DriverSetupError("Z homing must be 'switch' or 'focus'")
+        return mode
+
     def _setup_implementation(self, **kwargs: Any) -> None:
         self._config = dict(kwargs)
         self._tui_mode = bool(kwargs.get("tui", False))
@@ -526,6 +560,7 @@ class RuidaRPAAdapter(Driver):
         self._network_protocol = self._parse_network_protocol(
             kwargs.get("network_protocol")
         )
+        self._z_homing = self._parse_z_homing(kwargs.get("z_homing"))
 
         self._listeners_registered = False
         self._unreachable_warned = False
@@ -572,6 +607,7 @@ class RuidaRPAAdapter(Driver):
             protocol = self._parse_network_protocol(
                 kwargs.get("network_protocol")
             )
+            z_homing = self._parse_z_homing(kwargs.get("z_homing"))
         except DriverSetupError:
             return False
 
@@ -579,6 +615,7 @@ class RuidaRPAAdapter(Driver):
         self._rpc_timeout = timeout
         self._magic = magic
         self._network_protocol = protocol
+        self._z_homing = z_homing
 
         tui_mode = bool(kwargs.get("tui", False))
         return (
@@ -1199,7 +1236,10 @@ class RuidaRPAAdapter(Driver):
         elif axes & Axis.Y:
             await loop.run_in_executor(None, self._backend.jog_y_to, 0.0)
         if axes is not None and (axes & Axis.Z):
-            await loop.run_in_executor(None, self._backend.home_z)
+            if self._z_homing == Z_HOMING_FOCUS:
+                await loop.run_in_executor(None, self._backend.focus_z)
+            else:
+                await loop.run_in_executor(None, self._backend.home_z)
 
     async def move_to(
         self,

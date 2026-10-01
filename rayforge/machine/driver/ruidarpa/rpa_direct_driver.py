@@ -238,6 +238,15 @@ class RpaDirectDriver:
         """
         self._require_connected().home_z()
 
+    def focus_z(self) -> None:
+        """Run the controller's Z auto-focus with the focus probe.
+
+        The wrapped RdDriver auto-sends the generated lines when
+        connected; the returned lines are deliberately discarded so each
+        focus command is sent exactly once.
+        """
+        self._require_connected().focus_z()
+
     def jog_xy_to(self, x: float, y: float) -> None:
         """Jog the XY axes to an absolute position in mm.
 

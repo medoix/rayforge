@@ -962,6 +962,76 @@ class TestSingleAxisHome:
         backend.home.assert_not_called()
 
 
+class TestZHoming:
+    """Home Z follows the configured Z homing mode."""
+
+    def test_setup_var_defaults_to_home_switch(
+        self, isolated_context, isolated_machine
+    ):
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        var = adapter.get_setup_vars().get("z_homing")
+        assert var is not None
+        assert var.default == "switch"
+
+    def test_setup_parses_mode(self, isolated_context, isolated_machine):
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10", z_homing="focus")
+        assert adapter._z_homing == "focus"
+
+    def test_setup_rejects_unknown_mode(
+        self, isolated_context, isolated_machine
+    ):
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        with pytest.raises(DriverSetupError):
+            adapter._setup_implementation(
+                udp_host="192.168.1.10", z_homing="laser"
+            )
+
+    def test_mode_change_applies_without_rebuild(
+        self, isolated_context, isolated_machine
+    ):
+        adapter = RuidaRPAAdapter(isolated_context, isolated_machine)
+        adapter.setup(udp_host="192.168.1.10")
+
+        accepted = adapter.update_settings(
+            udp_host="192.168.1.10", z_homing="focus"
+        )
+
+        assert accepted is True
+        assert adapter._z_homing == "focus"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "adapter_pair",
+        [DIRECT_MODE, RPC_MODE],
+        ids=["direct", "rpc"],
+        indirect=True,
+    )
+    async def test_focus_mode_homes_z_with_focus_probe(self, adapter_pair):
+        adapter, backend = adapter_pair
+        adapter._z_homing = "focus"
+
+        await adapter.home(Axis.Z)
+
+        backend.focus_z.assert_called_once()
+        backend.home_z.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "adapter_pair",
+        [DIRECT_MODE, RPC_MODE],
+        ids=["direct", "rpc"],
+        indirect=True,
+    )
+    async def test_switch_mode_homes_z_with_home_switch(self, adapter_pair):
+        adapter, backend = adapter_pair
+
+        await adapter.home(Axis.Z)
+
+        backend.home_z.assert_called_once()
+        backend.focus_z.assert_not_called()
+
+
 class TestLiveBridgeDirect:
     """Direct live bridge delegates jog/home to the backend wrapper."""
 
