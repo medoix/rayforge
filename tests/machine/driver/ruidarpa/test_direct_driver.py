@@ -18,6 +18,8 @@ _LIVE_METHODS = [
     ("home", ()),
     ("home_z", ()),
     ("jog_xy_to", (10.0, 20.0)),
+    ("jog_x_to", (10.0,)),
+    ("jog_y_to", (20.0,)),
     ("jog_xy_rel", (5.0, 5.0)),
     ("jog_x_rel", (5.0,)),
     ("jog_y_rel", (5.0,)),
