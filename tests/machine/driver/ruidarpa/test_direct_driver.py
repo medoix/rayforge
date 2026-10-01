@@ -181,3 +181,23 @@ class TestStartDelegation:
         mock_driver.start.assert_called_once_with(
             udp_host="192.168.1.10", usb_device=None
         )
+
+
+class TestReadSettingsDelegation:
+    """read_settings() delegates to the connected RdDriver."""
+
+    def test_returns_wrapped_driver_values(self):
+        driver, mock_driver = _direct_driver(connected=True)
+        mock_driver.read_settings.return_value = {"MEM_BED_SIZE_X": 1300000}
+
+        values = driver.read_settings(["MEM_BED_SIZE_X"], 2.0)
+
+        assert values == {"MEM_BED_SIZE_X": 1300000}
+        mock_driver.read_settings.assert_called_once_with(
+            ["MEM_BED_SIZE_X"], 2.0
+        )
+
+    def test_requires_connection(self):
+        driver, _ = _direct_driver(connected=False)
+        with pytest.raises(RuntimeError):
+            driver.read_settings(["MEM_BED_SIZE_X"])

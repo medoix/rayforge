@@ -208,6 +208,16 @@ class RpaDirectDriver:
             return False
         return self._driver.protect_enabled
 
+    def read_settings(
+        self, mnemonics: list[str], timeout: float = 3.0
+    ) -> dict[str, int]:
+        """Read raw controller memory values by MEM_* mnemonic.
+
+        Blocks until every reply arrives or *timeout* seconds pass;
+        settings that did not reply are omitted.
+        """
+        return self._require_connected().read_settings(mnemonics, timeout)
+
     # --- Jog / Home ---
 
     def home(self) -> None:
